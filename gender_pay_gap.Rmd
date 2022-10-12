@@ -102,7 +102,7 @@ kable(contigency_df)
 
 ### Universties Submissions by Year
 
-Total submissions by year. A possible drop of is seen around 2020
+Total submissions by year. A possible drop of is seen around 2020.
 
 ```{r}
 employee_ids <- universities_df$EmployerId
@@ -116,3 +116,23 @@ year_counts <-
 kable(year_counts)
 ```
 
+### Summary Statistic
+
+Total submissions by year. A possible drop of is seen around 2020.
+
+```{r}
+summary_df <- 
+  combined_df %>%
+  group_by(year)%>%
+  summarise(min(DiffMedianHourlyPercent), mean(DiffMedianHourlyPercent), max(DiffMedianHourlyPercent))
+
+kable(summary_df)
+```
+### Visulations - Boxplot Median Payt Difference by Year
+
+Total submissions by year. A possible drop of is seen around 2020.
+
+```{r}
+ggplot(data = combined_df, aes(x=factor(year), y=DiffMedianHourlyPercent, fill=pre92))+
+  geom_boxplot()
+```
