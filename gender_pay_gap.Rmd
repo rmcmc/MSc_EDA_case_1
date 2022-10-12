@@ -1,10 +1,9 @@
 ---
-title: "Week 2"
-author: "Ross McCullough"
+title: "Gender Pay Gap"
+author: "Ross McCullough - Group 9"
 date: "09/10/2022"
 output:
   html_document:
-    code_folding: hide
     toc: true
     toc_float: true
     toc_depth: 4
@@ -19,57 +18,82 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, message=FALSE}
 library(tidyverse)
 library(lubridate)
-library(knitr)
+library(rmarkdown)
+
+#Set printed table options to a number that is not computationally limiting 
+options(max.print = 100)
 ```
 
 ## Load Data
 
 ### Load Yearly Pay Gap Data
+
+Gender pay gap data is provided for a number of years. All data is stored to the `./data` folder. `glob` is used to find the files and they are concatenated into to a dataframe.
+
 ```{r, message=FALSE}
-#List file is data dir
+#List file is data dir matching pattern
 gender_paygap_year_files <- 
   Sys.glob("./data/UK Gender Pay Gap Data -*.csv")
 
+#empty dataframe to append to
 all_year_df <- tibble()
 
+#for loop to run over file, read and concat
 for (csv in gender_paygap_year_files){
   year_df <- read_csv(csv)
   all_year_df <- rbind(all_year_df, year_df)
 }
+```
 
+It will be useful to be able to access the year later for analysis. This is pulled from the survey due date column, though there may be more reliable options, such as from the file path.
+
+```{r}
+# Get the year from the due date
 all_year_df <-
   all_year_df %>%
   mutate(year = year(DueDate))
-
-kable(head(all_year_df))
 ```
 
+A summary of the data is shown below
+
+```{r}
+paged_table(all_year_df)
+```
+
+
 ### Load University Data
+
+Ingest the universities data that designates whether the university was established pre 1992
 
 ```{r}
 universities_df <-
   read_csv("./data/universities.csv")
-universities_df
-kable(head(universities_df))
+
+paged_table(universities_df)
 ```
 
 ## Join Data
+
+The data is joined on the `EmployerId` column. This is prefferable to the name column which is suspectible to special characters, case, etc variation
 
 ```{r}
 combined_df <- 
   inner_join(universities_df,
              all_year_df,
              by="EmployerId")
+```
 
-      
+## Analyse
+
+### Contingency Tables
+
+```{r}
 combined_df %>%
    group_by(year)%>%
    count(pre92) %>%
    pivot_wider(values_from = n, names_from = pre92)
 
-
-kable(head(combined_df))
+paged_table(combined_df)
 ```
-
 
 
