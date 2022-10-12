@@ -1,0 +1,75 @@
+---
+title: "Week 2"
+author: "Ross McCullough"
+date: "09/10/2022"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Imports
+
+```{r, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+## Load Data
+
+### Load Yearly Pay Gap Data
+```{r, message=FALSE}
+#List file is data dir
+gender_paygap_year_files <- 
+  Sys.glob("./data/UK Gender Pay Gap Data -*.csv")
+
+all_year_df <- tibble()
+
+for (csv in gender_paygap_year_files){
+  year_df <- read_csv(csv)
+  all_year_df <- rbind(all_year_df, year_df)
+}
+
+all_year_df <-
+  all_year_df %>%
+  mutate(year = year(DueDate))
+
+kable(head(all_year_df))
+```
+
+### Load University Data
+
+```{r}
+universities_df <-
+  read_csv("./data/universities.csv")
+universities_df
+kable(head(universities_df))
+```
+
+## Join Data
+
+```{r}
+combined_df <- 
+  inner_join(universities_df,
+             all_year_df,
+             by="EmployerId")
+
+      
+combined_df %>%
+   group_by(year)%>%
+   count(pre92) %>%
+   pivot_wider(values_from = n, names_from = pre92)
+
+
+kable(head(combined_df))
+```
+
+
+
