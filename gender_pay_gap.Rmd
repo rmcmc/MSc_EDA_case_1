@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(rmarkdown)
+library(knitr)
 
 #Set printed table options to a number that is not computationally limiting 
 options(max.print = 100)
@@ -87,13 +88,31 @@ combined_df <-
 
 ### Contingency Tables
 
-```{r}
-combined_df %>%
-   group_by(year)%>%
-   count(pre92) %>%
-   pivot_wider(values_from = n, names_from = pre92)
+A contigency table of submissions by year (row) with `pre92` status (column). 
 
-paged_table(combined_df)
+```{r}
+contigency_df<-
+  combined_df %>%
+  group_by(year)%>%
+  count(pre92) %>%
+  pivot_wider(values_from = n, names_from = pre92)
+
+kable(contigency_df)
 ```
 
+### Universties Submissions by Year
+
+Total submissions by year. A possible drop of is seen around 2020
+
+```{r}
+employee_ids <- universities_df$EmployerId
+
+year_counts <-
+  all_year_df %>%
+  filter(EmployerId %in% employee_ids)%>%
+  group_by(year)%>%
+  count() 
+
+kable(year_counts)
+```
 
