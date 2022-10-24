@@ -34,7 +34,7 @@ Gender pay gap data is provided for a number of years. All data is stored to the
 ```{r, message=FALSE}
 #List file is data dir matching pattern
 gender_paygap_year_files <- 
-  Sys.glob("./data/UK Gender Pay Gap Data -*.csv")
+  Sys.glob("../data/UK Gender Pay Gap Data -*.csv")
 
 #empty dataframe to append to
 all_year_df <- tibble()
@@ -68,7 +68,7 @@ Ingest the universities data that designates whether the university was establis
 
 ```{r}
 universities_df <-
-  read_csv("./data/universities.csv")
+  read_csv("../data/universities.csv")
 
 paged_table(universities_df)
 ```
