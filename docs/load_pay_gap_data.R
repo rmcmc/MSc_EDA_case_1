@@ -1,5 +1,5 @@
 ## Purpose: EDA 1
-## Author: Karthik Paranthaman
+## Author: 
 ## Date: 2022-10-10
 
 ## load packages----
