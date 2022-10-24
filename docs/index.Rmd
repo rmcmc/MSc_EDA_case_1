@@ -1,225 +1,139 @@
 ---
-title: "Gender Pay Gap"
-author: "Ross McCullough - Group 9"
-date: "09/10/2022"
-output:
+title: "Gender Pay Gap Analysis"
+author: "Group 9"
+output: 
   html_document:
     toc: true
-    toc_float: true
-    toc_depth: 4
+    toc_float: TRUE
+    theme: paper
+editor_options: 
+  chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.align = "left", 
+                      fig.width = 10)
+
+pacman::p_load(kableExtra, ggrepel, scales, janitor, tidyverse, lubridate)
 ```
 
-### Imports
+```{r}
+pay_data_files <- list.files("../data/", pattern = ".*Pay.*", full.names = T) 
 
-```{r, message=FALSE}
-library(tidyverse)
-library(lubridate)
-library(rmarkdown)
-library(knitr)
+univ_data <- read_csv("../data/universities.csv")
 
-#Set printed table options to a number that is not computationally limiting 
-options(max.print = 100)
+raw_pay_data <- pay_data_files |> 
+  set_names() |> 
+  map_dfr(read_csv, .id = "yr") |> 
+  mutate(yr =gsub(".*([0-9]{4}) to .*([0-9]{2}).*", "\\1-\\2", yr))
+
+df <- inner_join(univ_data, raw_pay_data, by = "EmployerId") |> 
+  clean_names() |> 
+  select(employer_name = employer_name_x, 
+         employer_id, 
+         pre92, 
+         yr, 
+         diff_mean_hourly_percent:female_top_quartile,
+         employer_size) 
 ```
 
-## Load Data
 
-### Load Yearly Pay Gap Data
+### Table 1. Number of universities submitting data by pre92 status 
+```{r totals}
+df |> 
+  tabyl(yr,pre92) |> 
+  adorn_totals(c("row", "col")) |> 
+  kable(col.names = c("Year", "No", "Yes", "Total"),
+        align = "lccc") |> 
+  kable_styling(full_width = FALSE, position="left")
+```
 
-Gender pay gap data is provided for a number of years. All data is stored to the `./data` folder. `glob` is used to find the files and they are concatenated into to a dataframe.
+### Table 2. Difference in median hourly wage percent
+```{r}
+df |> 
+  group_by(Year = yr) |> 
+  summarise(`Mean difference` = mean(diff_median_hourly_percent) %>% 
+              round(.,1)%>%
+              paste0(., "%")) |> 
+  kable(align = "lc") |> 
+  kable_styling(full_width = FALSE, position="left")
 
-```{r, message=FALSE}
-#List file is data dir matching pattern
-gender_paygap_year_files <- 
-  Sys.glob("../data/UK Gender Pay Gap Data -*.csv")
+```
 
-#empty dataframe to append to
-all_year_df <- tibble()
+### Table 3. Wage difference by pre92 status and year 
+```{r}
+df |> 
+  group_by(yr, pre92) |> 
+  summarise(x = round(mean(diff_median_hourly_percent),1), 
+            .groups = "drop") |> 
+  mutate(x = paste0(x, "%")) |> 
+  pivot_wider(names_from = pre92, values_from = x) |> 
+  kable(align = "lcc", 
+        col.names = c("Year", "Pre92", "Not Pre92")) |> 
+  kable_styling(full_width = FALSE, position="left")
+```
 
-#for loop to run over file, read and concat
-for (csv in gender_paygap_year_files){
-  year_df <- read_csv(csv)
-  all_year_df <- rbind(all_year_df, year_df)
+### Figure 1. Differences in median hourly wage
+```{r fig.asp = 0.8, fig.width = 11, out.width= "100%"}
+
+find_outlier <- function(x) {
+  return(x < quantile(x, .25) - 1.5*IQR(x) | x > quantile(x, .75) + 1.5*IQR(x))
 }
+
+df |> 
+  group_by(yr, pre92) |> 
+  mutate(employer_name = toupper(employer_name),
+    outlier =ifelse(find_outlier(diff_median_hourly_percent), employer_name, NA)) |> 
+  ungroup() |> 
+  ggplot(aes(yr,diff_median_hourly_percent,fill = pre92))+
+  geom_boxplot() +
+  geom_text_repel(aes(label = outlier), na.rm = TRUE, show.legend = F)+
+  scale_y_continuous(breaks = seq(0,100, 10), labels = percent_format(scale = 1))+
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Difference in median hourly wage\n", 
+       title = "Differences in median hourly wages have not changed much in last five years.\nUniversities established before 1992 have higher median differences compared to those established after 1992.",
+       subtitle = "",
+       caption = "\nData source: UK Government gender pay gap service", 
+       fill = "Universities established before 1992")+
+  theme(legend.position = "top", 
+        text = element_text(size = 14), 
+        plot.title = element_text(size =12))
 ```
 
-It will be useful to be able to access the year later for analysis. This is pulled from the survey due date column, though there may be more reliable options, such as from the file path.
-
-```{r}
-# Get the year from the due date
-all_year_df <-
-  all_year_df %>%
-  mutate(year = year(DueDate))
-```
-
-A summary of the data is shown below
-
-```{r}
-paged_table(all_year_df)
-```
-
-
-### Load University Data
-
-Ingest the universities data that designates whether the university was established pre 1992
-
-```{r}
-universities_df <-
-  read_csv("../data/universities.csv")
-
-paged_table(universities_df)
-```
-
-## Join Data
-
-The data is joined on the `EmployerId` column. This is prefferable to the name column which is suspectible to special characters, case, etc variation
-
-```{r}
-combined_df <- 
-  inner_join(universities_df,
-             all_year_df,
-             by="EmployerId")
-```
-
-## Analyse
-
-### Contingency Tables
-
-A contigency table of submissions by year (row) with `pre92` status (column). 
-
-```{r}
-contigency_df<-
-  combined_df %>%
-  group_by(year)%>%
-  count(pre92) %>%
-  pivot_wider(values_from = n, names_from = pre92)
-
-kable(contigency_df)
-```
-
-### Universties Submissions by Year
-
-Total submissions by year. A possible drop of is seen around 2020.
-
-```{r}
-employee_ids <- universities_df$EmployerId
-
-year_counts <-
-  all_year_df %>%
-  filter(EmployerId %in% employee_ids)%>%
-  group_by(year)%>%
-  count() 
-
-kable(year_counts)
-```
-
-### Summary Statistic
-
-Total submissions by year. A possible drop of is seen around 2020.
-
-```{r}
-summary_df <- 
-  combined_df %>%
-  group_by(year)%>%
-  summarise(min(DiffMedianHourlyPercent), mean(DiffMedianHourlyPercent), max(DiffMedianHourlyPercent))
-
-kable(summary_df)
-```
-### Visulations - Boxplot Median Payt Difference by Year
-
-Total submissions by year. A possible drop of is seen around 2020.
-
-```{r}
-ggplot(data = combined_df, aes(x=factor(year), y=DiffMedianHourlyPercent, fill=pre92))+
-  geom_boxplot()
+### Figure 2. Differences in proportion of women working by quartile
+```{r fig.asp = 0.8, fig.width = 11, out.width= "110%"}
+df |> 
+  select(pre92, contains("female")) |> 
+  select(-female_bonus_percent) |> 
+  pivot_longer(-pre92, names_to = "measure") |> 
+  mutate(measure = case_when(
+    measure == "female_lower_middle_quartile" ~ "Lower middle quartile",
+    measure == "female_lower_quartile" ~ "Lower quartile",
+    measure == "female_upper_middle_quartile" ~ "Top middle quartile",
+    measure == "female_top_quartile" ~ "Top quartile") |> 
+      factor(levels = c("Top quartile", 
+                        "Top middle quartile",
+                        "Lower middle quartile",
+                        "Lower quartile"))) |> 
+  ggplot()+
+  geom_boxplot(aes(x = fct_rev(measure), y = value, fill = pre92)) +
+  scale_y_continuous(breaks = seq(0,100, 10), labels = percent_format(scale = 1))+
+  geom_hline(aes(yintercept= 50), linetype = "dashed", color = "red")+
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Proportion of women in workforce\n", 
+       title = "The proportion of women working in top quartile is lower compared to other quartiles.\nUniversities established before 1992 have lower proportion of women in top quartile compared to those established after 1992.",
+       caption = "\nData source: UK Government gender pay gap service",
+       fill = "Universities established before 1992") +
+  theme(legend.position = "top", 
+     text = element_text(size = 14), 
+        plot.title = element_text(size =12))
 ```
 
 
-### Visulations - Best and worst 
 
-```{r}
-full_sub_df <-
-  combined_df %>%
-  drop_na(DiffMedianHourlyPercent) %>%
-  group_by(EmployerName.x)%>%
-  count() %>%
-  filter(n==5)
-  
-
-
-plot_df <-
-  combined_df %>%
-  select(c(EmployerName.x, pre92, year, DiffMedianHourlyPercent, EmployerSize)) %>%
-  mutate(University = EmployerName.x)%>%
-  filter(University %in% full_sub_df$EmployerName.x) %>%
-  filter(EmployerSize == '1000 to 4999')
-
-mean_median_hourly_df <-
-  plot_df %>%
-  group_by(year) %>%
-  summarize(Mean = mean(DiffMedianHourlyPercent))
-
-ggplot(data = mean_median_hourly_df, aes(x=year, y=Mean))+
-  geom_line(data = plot_df, 
-            aes(y = DiffMedianHourlyPercent, group = University), 
-            color = "grey", 
-            size = 1, 
-            alpha = 0.5) +
-  geom_line()+
-  geom_point()+
-  theme(legend.position = "none")
-
-```
-
-```{r}
-days_late <- 
-  combined_df %>%
-  filter(year == 2022)%>%
-  mutate(days_late = difftime(DueDate, DateSubmitted, units="days"))
-
-ggplot(data = days_late, aes(x=pre92, y = days_late))+
-  geom_point()
-```
-
-
-```{r}
-days_late <- 
-  combined_df %>%
-  mutate(days_late = difftime(DueDate, DateSubmitted, units="days"))
-
-ggplot(data = days_late, aes(x=factor(pre92), y = days_late))+
-  geom_boxplot()
-
-
-
-```
-
-
-```{r}
-postcode_df <- read.csv("https://raw.githubusercontent.com/radiac/UK-Postcodes/master/postcodes.csv")
-
-postcode_df
-
-plot_me <- 
-  combined_df%>%
-  rowwise()%>%
-  mutate(split_postcode =  scan(text=PostCode, what = " ")[1])%>%
-  inner_join(x=., y=postcode_df, by= c('split_postcode' = 'postcode'))%>%
-  filter(EmployerSize == '1000 to 4999'|EmployerSize == '5000 to 19,999')
-  
-
-```
-
-
-```{r}
-
-ggplot(data=plot_me, aes(x=latitude, y = DiffMedianHourlyPercent))+
-  geom_point()+
-  geom_smooth(method = 'lm')+
-  facet_wrap(~year)
-  
-```
 
