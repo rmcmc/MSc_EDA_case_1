@@ -136,3 +136,90 @@ Total submissions by year. A possible drop of is seen around 2020.
 ggplot(data = combined_df, aes(x=factor(year), y=DiffMedianHourlyPercent, fill=pre92))+
   geom_boxplot()
 ```
+
+
+### Visulations - Best and worst 
+
+```{r}
+full_sub_df <-
+  combined_df %>%
+  drop_na(DiffMedianHourlyPercent) %>%
+  group_by(EmployerName.x)%>%
+  count() %>%
+  filter(n==5)
+  
+
+
+plot_df <-
+  combined_df %>%
+  select(c(EmployerName.x, pre92, year, DiffMedianHourlyPercent, EmployerSize)) %>%
+  mutate(University = EmployerName.x)%>%
+  filter(University %in% full_sub_df$EmployerName.x) %>%
+  filter(EmployerSize == '1000 to 4999')
+
+mean_median_hourly_df <-
+  plot_df %>%
+  group_by(year) %>%
+  summarize(Mean = mean(DiffMedianHourlyPercent))
+
+ggplot(data = mean_median_hourly_df, aes(x=year, y=Mean))+
+  geom_line(data = plot_df, 
+            aes(y = DiffMedianHourlyPercent, group = University), 
+            color = "grey", 
+            size = 1, 
+            alpha = 0.5) +
+  geom_line()+
+  geom_point()+
+  theme(legend.position = "none")
+
+```
+
+```{r}
+days_late <- 
+  combined_df %>%
+  filter(year == 2022)%>%
+  mutate(days_late = difftime(DueDate, DateSubmitted, units="days"))
+
+ggplot(data = days_late, aes(x=pre92, y = days_late))+
+  geom_point()
+```
+
+
+```{r}
+days_late <- 
+  combined_df %>%
+  mutate(days_late = difftime(DueDate, DateSubmitted, units="days"))
+
+ggplot(data = days_late, aes(x=factor(pre92), y = days_late))+
+  geom_boxplot()
+
+
+
+```
+
+
+```{r}
+postcode_df <- read.csv("https://raw.githubusercontent.com/radiac/UK-Postcodes/master/postcodes.csv")
+
+postcode_df
+
+plot_me <- 
+  combined_df%>%
+  rowwise()%>%
+  mutate(split_postcode =  scan(text=PostCode, what = " ")[1])%>%
+  inner_join(x=., y=postcode_df, by= c('split_postcode' = 'postcode'))%>%
+  filter(EmployerSize == '1000 to 4999'|EmployerSize == '5000 to 19,999')
+  
+
+```
+
+
+```{r}
+
+ggplot(data=plot_me, aes(x=latitude, y = DiffMedianHourlyPercent))+
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  facet_wrap(~year)
+  
+```
+
