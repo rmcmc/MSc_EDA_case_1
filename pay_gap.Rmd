@@ -1,0 +1,163 @@
+---
+title: "Gender Pay Gap in the University sector"
+author: "Group 9"
+output: 
+  html_document:
+    toc: true
+    toc_float: TRUE
+    theme: paper
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include = FALSE}
+
+## set options 
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.align = "left", 
+                      fig.asp = 0.8, 
+                      fig.width = 11)
+
+## load packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(janitor, tidyverse, lubridate, kableExtra, ggrepel, scales)
+
+## load and clean data----
+univ_data <- read_csv("universities.csv")
+
+pay_data_files <- list.files("./", pattern = ".*Pay.*", full.names = T) 
+
+raw_pay_data <- pay_data_files |> 
+  set_names() |> 
+  map_dfr(read_csv, .id = "yr") |> 
+  mutate(yr =gsub(".*([0-9]{4}) to .*([0-9]{2}).*", "\\1-\\2", yr))
+
+df <- inner_join(univ_data, raw_pay_data, by = "EmployerId") |> 
+  clean_names() |> 
+  select(employer_name = employer_name_x, 
+         employer_id, 
+         pre92, 
+         yr, 
+         diff_mean_hourly_percent:female_top_quartile,
+         employer_size) 
+
+```
+
+## Introduction
+
+This report assesses potential gender pay inequalities in the university sector. We look at data from 2017 - 2022 and study whether there are differences between universities that were formed pre or post [1992](https://en.wikipedia.org/wiki/Post-1992_university).
+
+Data has been obtained from the [UK Government Gender Pay Gap Website](https://gender-pay-gap.service.gov.uk) and institutions were independently identified as being pre or post 1992. An summary of key finding from the data analysis is presented below.
+
+## Results
+
+In the investigation data from nearly 100 universities per year is provided. Overall more submissions have been received by Pre 92 status universities however these are only totals and not proportions. The number of submissions over time has stayed constant. Submission counts are provided in Table 1. 
+
+### Table 1. Number of universities submitting data by Pre 92 status 
+```{r totals}
+df |> 
+  tabyl(yr,pre92) |> 
+  adorn_totals(c("row", "col")) |> 
+  kable(col.names = c("Year", "No", "Yes", "Total"),
+        align = "lccc") |> 
+  kable_styling(full_width = FALSE, position="left")
+```
+
+From the data provided it appears that the gap between genders is decreasing over time in the university sector. Table 2 shows that from 2017-2018 to 2021-22 there has been a mean 22.7% reduction in Median Hourly Wage difference.
+
+### Table 2. Difference in median hourly wage percent
+```{r}
+df |> 
+  group_by(Year = yr) |> 
+  summarise(`Mean difference` = mean(diff_median_hourly_percent) %>% 
+              round(.,1)%>%
+              paste0(., "%")) |> 
+  kable(align = "lc") |> 
+  kable_styling(full_width = FALSE, position="left")
+
+```
+
+Table 3 shows a persistent trend that in pre 92 status universities there is a higher median hourly pay difference, which presents consistently over the studied duration. 
+
+### Table 3. Yearly mean of Median Hourly Wage Difference by Pre 92 Status
+```{r}
+df |> 
+  group_by(yr, pre92) |> 
+  summarise(x = round(mean(diff_median_hourly_percent),1), 
+            .groups = "drop") |> 
+  mutate(x = paste0(x, "%")) |> 
+  pivot_wider(names_from = pre92, values_from = x) |> 
+  kable(align = "lcc", 
+        col.names = c("Year", "Post 92", "Pre 92")) |> 
+  kable_styling(full_width = FALSE, position="left")
+```
+
+This data is also shown in Figure 1 as box plots. The plot shows as previously discussed that generally the Median Hourly pay gap is decreasing over time, however there is a sizable difference in pay gap between pre and post 92 institutions, with the former having worse inequality.
+
+### Figure 1. Differences in median hourly wage
+```{r out.width= "100%"}
+
+find_outlier <- function(x) {
+  return(x < quantile(x, .25) - 1.5*IQR(x) | x > quantile(x, .75) + 1.5*IQR(x))
+}
+
+df |> 
+  group_by(yr, pre92) |> 
+  mutate(employer_name = toupper(employer_name),
+    outlier =ifelse(find_outlier(diff_median_hourly_percent), employer_name, NA)) |> 
+  ungroup() |> 
+  ggplot(aes(yr,diff_median_hourly_percent,fill = pre92))+
+  geom_boxplot() +
+  geom_text_repel(aes(label = outlier), na.rm = TRUE, show.legend = F)+
+  scale_y_continuous(breaks = seq(0,100, 10), labels = percent_format(scale = 1))+
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Difference in median hourly wage\n", 
+       title = "Differences in median hourly wages have not changed much in last five years.\nUniversities established before 1992 have higher median differences compared to those established after 1992.",
+       subtitle = "",
+       caption = "\nData source: UK Government gender pay gap service", 
+       fill = "Universities established before 1992")+
+  theme(legend.position = "top", 
+        text = element_text(size = 14), 
+        plot.title = element_text(size =12))
+```
+
+Figure 2 assesses the proportion of female to male staffing in the various different pay quartiles. The plots show that female employees disproportionately are employed in lower paying roles in both pre and post 92 positions. Although generally the difference between pre and post 92 status is limited, there is a significant difference in the highest quartile with very low female representation in the top quartile.
+
+### Figure 2. Differences in proportion of women working by pay quartile
+```{r out.width= "100%"}
+df |> 
+  select(pre92, contains("female")) |> 
+  select(-female_bonus_percent) |> 
+  pivot_longer(-pre92, names_to = "measure") |> 
+  mutate(measure = case_when(
+    measure == "female_lower_middle_quartile" ~ "Lower middle quartile",
+    measure == "female_lower_quartile" ~ "Lower quartile",
+    measure == "female_upper_middle_quartile" ~ "Top middle quartile",
+    measure == "female_top_quartile" ~ "Top quartile") |> 
+      factor(levels = c("Top quartile", 
+                        "Top middle quartile",
+                        "Lower middle quartile",
+                        "Lower quartile"))) |> 
+  ggplot()+
+  geom_boxplot(aes(x = fct_rev(measure), y = value, fill = pre92)) +
+  scale_y_continuous(breaks = seq(0,100, 10), labels = percent_format(scale = 1))+
+  geom_hline(aes(yintercept= 50), linetype = "dashed", color = "red")+
+  theme_classic() +
+  labs(x = NULL, 
+       y = "Proportion of women in workforce\n", 
+       title = "The proportion of women working in top quartile is lower compared to other quartiles.\nUniversities established before 1992 have lower proportion of women in top quartile compared to those established after 1992.",
+       caption = "\nData source: UK Government gender pay gap service",
+       fill = "Universities established before 1992") +
+  theme(legend.position = "top",
+     text = element_text(size = 14), 
+        plot.title = element_text(size =12))
+```
+
+
+## Conclusion
+
+The data suggests that although the median hourly pay between men and women is reducing in the university sector there remains a significant imbalance (>10%), with men on average being paid more. There appears to be a greater imbalance between universities that were established before 1992.
+
